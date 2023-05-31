@@ -1,0 +1,132 @@
+--view dataset--
+SELECT *
+FROM CopyofCopyofIMDBTop250MoviesCleanedIMDBTop250Movies;
+
+-- Change table name --
+ALTER TABLE CopyofCopyofIMDBTop250MoviesCleanedIMDBTop250Movies RENAME TO Movies
+
+SELECT*
+FROM Movies
+
+--Top 5 Budgeted Movies--Movies
+SELECT name, budget
+FROM Movies
+ORDER BY budget DESC
+LIMIT 5
+
+
+'We can see there is an obvious outlier with the top movie Princess Mononoke.  By doing a quick google search we can see the actual movie budget matches this number in Japanese Yen, Not in USD.  So lets fix that to the USD equivalent $23,500,000.
+3 Idiots as well is a foreign movie so lets see the converted rate for 55 crore.  It is actually just under 6.7 million.
+Because the other top 5 movies are from the US, no other adjustments are necessary'
+
+
+--Princess Mononoke update--
+UPDATE Movies
+SET budget= REPLACE(budget,2400000000,23500000)
+
+--Top 5 Budgeted Movies Updated--
+SELECT name, budget
+FROM Movies
+ORDER BY budget DESC
+LIMIT 5
+
+--3 Idiots update--
+UPDATE Movies
+SET budget= REPLACE(budget,50000000,6700000)
+
+--Top 5 Budgeted Movies Second Update--
+
+SELECT name, budget
+FROM Movies
+ORDER BY budget DESC
+LIMIT 5
+
+--Top 5 Rated Movies
+SELECT name, rating
+FROM Movies
+ORDER BY rating DESC
+LIMIT 5
+
+--Top 5 Box Office Hits--
+SELECT name, box_office
+FROM Movies
+ORDER BY box_office DESC
+LIMIT 5
+
+--Top 10 Highest Profits--
+SELECT name, box_office, budget, (box_office-budget) AS profit
+FROM Movies
+ORDER BY profit DESC
+LIMIT 10
+
+--Lowest Profit--
+SELECT name, box_office, budget, (box_office-budget) AS profit
+FROM Movies
+ORDER BY profit 
+LIMIT 10
+
+--Most Popular Genres--Movies
+SELECT genre, COUNT(*) AS genre_count
+FROM (
+  SELECT TRIM(value) AS genre
+  FROM Movies
+  CROSS JOIN json_each('["' || REPLACE(genre, ',', '","') || '"]')
+)
+GROUP BY genre
+ORDER BY genre_count DESC
+LIMIT 5
+
+--how many movies in each rating category--
+SELECT certificate, COUNT(*) AS total
+FROM Movies
+GROUP BY certificate
+ORDER BY total DESC
+
+--Top 10 Directors--
+SELECT directors, COUNT(*) as Number_of_movies
+FROM Movies
+GROUP BY directors
+ORDER BY COUNT(*) DESC
+LIMIT 10
+
+--Best Year for Movies--
+SELECT year, COUNT(year) AS Number_of_Movies_Per_Year
+FROM Movies
+GROUP BY year
+ORDER BY COUNT(year) DESC
+LIMIT 10
+
+--How Many Movies in Each Decade--
+SELECT
+	year/10*10 + 1 as decade_start,
+    year/10*10 + 10 as decade_end,
+    COUNT(year) as number_of_movies
+FROM Movies
+GROUP BY year/10
+ORDER BY decade_start
+
+--Most Popular Movie Genre in Each Decade--
+WITH genre_counts AS (
+  SELECT genre, COUNT(*) AS genre_count, year
+  FROM (
+    SELECT TRIM(value) AS genre, year
+    FROM Movies
+    CROSS JOIN json_each('["' || REPLACE(genre, ',', '","') || '"]')
+  )
+  GROUP BY genre, year
+), decade_max_genre AS (
+  SELECT d.decade_start, d.decade_end, gc.genre,
+         ROW_NUMBER() OVER (PARTITION BY d.decade_start ORDER BY gc.genre_count DESC) AS rn
+  FROM (
+    SELECT 
+      year/10 * 10 + 1 AS decade_start,
+      year/10 * 10 + 10 AS decade_end
+    FROM Movies
+    GROUP BY year/10
+  ) d
+  JOIN genre_counts gc ON gc.year >= d.decade_start AND gc.year <= d.decade_end
+)
+SELECT decade_start, decade_end, genre
+FROM decade_max_genre
+WHERE rn = 1
+ORDER BY decade_start
